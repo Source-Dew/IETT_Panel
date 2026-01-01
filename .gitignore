@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist_electron/
+*.log
+.env
+python/config.json
+IETT_Sorgu_Sonuc.xlsx
+*.xlsx
+.vscode/
+.idea/
+build/
+bin/
+obj/
