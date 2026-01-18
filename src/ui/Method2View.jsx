@@ -9,6 +9,8 @@ import HKPassenger from '../modules/method2/HKPassenger';
 import PCOffline from '../modules/method2/PCOffline';
 import OHOOffline from '../modules/method2/OHOOffline';
 import IETTOffline from '../modules/method2/IETTOffline';
+import OHOTrigger from '../modules/method2/OHOTrigger';
+
 
 const Method2View = ({ activeMode, onModeChange }) => {
 
@@ -25,6 +27,7 @@ const Method2View = ({ activeMode, onModeChange }) => {
             case 'yolcu': return <HKPassenger />;
             case 'pc_offline': return <PCOffline />;
             case 'oho_offline': return <OHOOffline />;
+            case 'oho_trigger': return <OHOTrigger />;
             case 'iett_offline': return <IETTOffline />;
             default: return <div className="text-slate-400">Mod seçilmedi veya geliştirme aşamasında.</div>;
         }

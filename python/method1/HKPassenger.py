@@ -48,16 +48,36 @@ async def process_hk_passenger(file_path, threshold, log_func):
             log(f"%{threshold} üzerinde yolcu yükü olan uygun (G-olmayan) araç bulunamadı.", 100)
             return
 
-        log("Veriler işleniyor (İETT sorgusu atlandı)...", 60)
+        # Ağ Durumu Normalizasyon
+        def normalize_status(val):
+            s = str(val).lower()
+            if 'dışı' in s or 'offline' in s or 'kapalı' in s or 'pasif' in s: return 'Çevrim dışı'
+            return 'Çevrimiçi'
 
-        # Rapor Hazırlama
-        df_report = pd.DataFrame()
-        df_report['Plaka Numarası'] = df_final[plaka_col]
-        df_report['Adres'] = df_final[adres_col] if adres_col else ""
-        df_report['Yolcu Yükü (%)'] = df_final[yolcu_col]
-        df_report['İETT Durumu'] = "Sorgulanmadı"
+        df_final['__status_norm'] = df_final[status_col].apply(normalize_status)
+
+        # Sıralama: Ağ Durumu (Çevrimiçi önce) -> Yolcu Yükü (Yüksek önce)
+        df_final = df_final.sort_values(by=['__status_norm', '__yolcu'], ascending=[False, False])
         
-        df_report = df_report.sort_values(by=['__yolcu'], ascending=False)
+        # Rapor Hazırlama ve Grupları Ayırma
+        df_online = df_final[df_final['__status_norm'] == 'Çevrimiçi'].copy()
+        df_offline = df_final[df_final['__status_norm'] == 'Çevrim dışı'].copy()
+
+        def create_report_section(source_df):
+            temp = pd.DataFrame()
+            temp['Plaka Numarası'] = source_df[plaka_col]
+            temp['Adres'] = source_df[adres_col] if adres_col else ""
+            temp['Ağ Durumu'] = source_df['__status_norm']
+            temp['Yolcu Yükü Faktörü'] = source_df[yolcu_col]
+            return temp
+
+        rep_online = create_report_section(df_online)
+        rep_offline = create_report_section(df_offline)
+        
+        # Aralara 2 boş satır ekle
+        empty_rows = pd.DataFrame([["", "", "", ""]] * 2, columns=rep_online.columns)
+        
+        df_report = pd.concat([rep_online, empty_rows, rep_offline], ignore_index=True)
 
         output_path = generate_premium_excel(df_report, "HIKVISION YOLCU YÜKÜ ANALİZİ", "HIKVISION Yolcu Yükü Veri (1.Yöntem).xlsx", log)
         
