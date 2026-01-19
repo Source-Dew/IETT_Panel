@@ -74,6 +74,18 @@ const Sidebar = ({ activeMode, onModeChange, disabled, onOpenSettings, onCleanOu
                     <span className="font-medium text-sm">ÖHO Tetik Veri</span>
                 </button>
 
+                <button
+                    onClick={() => onModeChange('oho_trigger')}
+                    disabled={disabled}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-left group ${activeMode === 'oho_trigger'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                    <Activity size={20} className={activeMode === 'oho_trigger' ? 'text-white' : 'text-blue-400'} />
+                    <span className="font-medium text-sm">ÖHO Tetik Veri</span>
+                </button>
+
                 {/* IETT */}
                 <div className="flex items-center gap-3 mb-2 mt-6 opacity-90">
                     <div className="h-1 bg-white flex-1 rounded-full"></div>
