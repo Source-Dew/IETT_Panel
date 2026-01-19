@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
+import { Save, AlertCircle } from 'lucide-react';
 
 const Settings = ({ onClose, selectedMethod }) => {
     const [hkOfflineThreshold, setHkOfflineThreshold] = useState(360);
@@ -61,9 +61,6 @@ const Settings = ({ onClose, selectedMethod }) => {
                 <AlertCircle className="text-blue-400 shrink-0" size={24} />
                 <p className="text-sm text-blue-200/80 leading-relaxed">
                     Buradaki ayarlar, raporlama motorunun çalışma parametrelerini belirler.
-                    <span className="font-bold text-blue-400 ml-1">
-                        {selectedMethod === 1 ? "1. Yöntem" : "2. Yöntem"}
-                    </span> parametreleri aktiftir.
                 </p>
             </div>
 

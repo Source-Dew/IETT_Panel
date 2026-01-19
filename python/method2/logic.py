@@ -8,9 +8,10 @@ from .HKOffline import process_hk_offline
 from .HKHDD import process_hk_hdd
 from .HKFirebox import process_hk_firebox
 from .HKPassenger import process_hk_passenger
-from .PCOffline import process_pc_offline
+
 from .OHOOffline import process_oho_offline
 from .IETTOffline import process_iett_offline
+from .OHOTrigger import process_oho_trigger
 
 def run(args):
     mode = args.get('mode', 'unknown')
@@ -41,21 +42,35 @@ def run(args):
 
     elif mode == 'hdd': # HIKVISION HDD Errors
         target_file = args.get('file') or file2 or file1
+        if isinstance(target_file, list) and len(target_file) > 0:
+            target_file = target_file[0]
         process_hk_hdd(target_file, log)
 
     elif mode == 'firebox': # HIKVISION Firebox Errors
         target_file = args.get('file') or file2 or file1
+        if isinstance(target_file, list) and len(target_file) > 0:
+            target_file = target_file[0]
         process_hk_firebox(target_file, log)
 
     elif mode == 'yolcu': # HIKVISION Passenger Load
         target_file = args.get('file') or file2 or file1
+        if isinstance(target_file, list) and len(target_file) > 0:
+            target_file = target_file[0]
         process_hk_passenger(target_file, threshold, log)
 
-    elif mode == 'pc_offline': # Atayol vs PC/Atayol Veri List
-        process_pc_offline(file1, file2, log)
+
 
     elif mode == 'oho_offline': # Atayol vs OHO Veri List
         process_oho_offline(file1, file2, threshold, log)
+
+    elif mode == 'oho_trigger': # OHO Trigger Analysis
+        target_files = args.get('file') or ([file2] if file2 else []) or ([file1] if file1 else [])
+        if isinstance(target_files, str): target_files = [target_files]
+        cars2_list = args.get('cars2', '')
+        cars3_list = args.get('cars3', '')
+        detailed_cars = args.get('detailed_cars', '')
+        is_detailed = args.get('is_detailed', False)
+        process_oho_trigger(target_files, cars2_list, cars3_list, log, detailed_cars, is_detailed)
 
     elif mode == 'iett_offline': # Atayol vs IETT Veri List
         process_iett_offline(file1, file2, threshold, log)

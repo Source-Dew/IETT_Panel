@@ -1,5 +1,4 @@
 const { app, BrowserWindow, ipcMain, dialog, Notification, shell } = require('electron');
-const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const { PythonShell } = require('python-shell');
 const { spawn } = require('child_process');
@@ -7,6 +6,10 @@ const readline = require('readline');
 const fs = require('fs');
 const log = require('electron-log');
 log.transports.file.level = 'info';
+const os = require('os');
+
+// Auto updater - loaded lazily when packaged
+let autoUpdater = null;
 
 let mainWindow = null;
 
@@ -44,8 +47,27 @@ function createWindow() {
 app.whenReady().then(() => {
     createWindow();
 
-    // Auto update check
+    // Auto update check - only load and check when packaged
     if (app.isPackaged) {
+        autoUpdater = require('electron-updater').autoUpdater;
+        autoUpdater.logger = log;
+        autoUpdater.on('update-available', () => {
+            log.info('Güncelleme bulundu.');
+        });
+        autoUpdater.on('update-downloaded', () => {
+            log.info('Güncelleme indirildi. Uygulama kapatılıp güncellenecek.');
+            dialog.showMessageBox({
+                type: 'info',
+                title: 'Güncelleme Hazır',
+                message: 'Yeni bir sürüm indirildi. Güncellemek için uygulama yeniden başlatılacak.',
+                buttons: ['Hemen Yükle']
+            }).then(() => {
+                autoUpdater.quitAndInstall();
+            });
+        });
+        autoUpdater.on('error', (err) => {
+            log.error('Güncelleme hatası:', err);
+        });
         autoUpdater.checkForUpdatesAndNotify();
     }
 
@@ -95,7 +117,7 @@ ipcMain.handle('save-settings', async (event, settings) => {
     }
 });
 
-ipcMain.handle('run-python-script', async (event, args) => {
+ipcMain.handle('run-python-script', async (event, input) => {
     if (pythonShellInstance) {
         pythonShellInstance.kill();
         pythonShellInstance = null;
@@ -105,7 +127,16 @@ ipcMain.handle('run-python-script', async (event, args) => {
         pythonProcess = null;
     }
 
-    const pythonArgs = [...args, '--config', configPath];
+    // To avoid ENAMETOOLONG error on Windows with many arguments,
+    // we save the input to a temporary JSON file and pass its path.
+    const inputJsonPath = path.join(app.getPath('userData'), 'python_input.json');
+    try {
+        fs.writeFileSync(inputJsonPath, JSON.stringify(input, null, 2));
+    } catch (err) {
+        console.error("Failed to write input JSON:", err);
+    }
+
+    let pythonArgs = ['--input_file', inputJsonPath, '--config', configPath];
 
     return new Promise((resolve, reject) => {
         if (app.isPackaged) {
@@ -246,43 +277,7 @@ ipcMain.handle('check-report-exists', async (event, filename) => {
     return null;
 });
 
-ipcMain.handle('sniff-files', async (event, filePaths) => {
-    return new Promise((resolve, reject) => {
-        const scriptPath = path.join(__dirname, '../python/main.py');
-        let options = {
-            mode: 'text',
-            pythonPath: 'python',
-            pythonOptions: ['-u'],
-            scriptPath: path.dirname(scriptPath),
-            args: ['sniff', '--config', configPath]
-        };
 
-        // Add file paths to args
-        filePaths.forEach((p, i) => {
-            options.args.push(i === 0 ? '--file1' : (i === 1 ? '--file2' : '--file'));
-            options.args.push(p);
-        });
-
-        const pyShell = new PythonShell('main.py', options);
-        let result = null;
-
-        pyShell.on('message', function (message) {
-            try {
-                const data = JSON.parse(message);
-                if (data.type === 'sniff_result') {
-                    result = data.data;
-                }
-            } catch (e) {
-                console.log('Sniff parse error:', message);
-            }
-        });
-
-        pyShell.end(function (err) {
-            if (err) reject(err);
-            else resolve(result);
-        });
-    });
-});
 
 ipcMain.handle('select-file', async () => {
     const result = await dialog.showOpenDialog({
@@ -294,67 +289,111 @@ ipcMain.handle('select-file', async () => {
     return result.filePaths[0];
 });
 
-ipcMain.handle('clean-outputs', async () => {
+ipcMain.handle('select-files', async () => {
+    const result = await dialog.showOpenDialog({
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+            { name: 'Excel/CSV', extensions: ['xlsx', 'xls', 'csv'] }
+        ]
+    });
+    return result.filePaths;
+});
+
+ipcMain.handle('clean-outputs', async (event, args) => {
+    let deletedCount = 0;
     try {
-        const desktopPath = app.getPath('desktop');
-        const homePath = app.getPath('home');
-        const pathsToCheck = [
-            path.join(desktopPath, 'IETT Veri Panel Çıktı'),
-            path.join(homePath, 'Desktop', 'IETT Veri Panel Çıktı'),
-            path.join(homePath, 'OneDrive', 'Desktop', 'IETT Veri Panel Çıktı'),
-            path.join(homePath, 'OneDrive', 'Masaüstü', 'IETT Veri Panel Çıktı')
-        ];
+        log.info('Clean outputs started');
 
-        const fs = require('fs');
-        let foundDir = null;
+        // Kill blockers
+        const { execSync } = require('child_process');
+        try { execSync('taskkill /F /IM excel.exe /T', { stdio: 'ignore' }); } catch (e) { }
 
-        for (const p of pathsToCheck) {
-            if (fs.existsSync(p)) {
-                foundDir = p;
-                break;
+        const home = os.homedir();
+        const searchPaths = [...new Set([
+            app.getPath('desktop'),
+            path.join(home, 'Desktop'),
+            path.join(home, 'Masaüstü'),
+            path.join(home, 'OneDrive', 'Desktop'),
+            path.join(home, 'OneDrive', 'Masaüstü'),
+            path.join(home, 'OneDrive - itm', 'Desktop'),
+            path.join(home, 'OneDrive - itm', 'Masaüstü')
+        ])];
+
+        let targets = [];
+        for (const sp of searchPaths) {
+            if (!fs.existsSync(sp)) continue;
+            try {
+                const items = fs.readdirSync(sp);
+                for (const item of items) {
+                    const norm = item.toLowerCase().normalize('NFC').replace(/İ/g, 'i');
+                    if (norm.includes('iett') && norm.includes('panel') && (norm.includes('cikti') || norm.includes('çıktı'))) {
+                        targets.push(path.join(sp, item));
+                    }
+                }
+            } catch (e) { }
+        }
+
+        targets = [...new Set(targets)];
+
+        if (targets.length === 0) {
+            const { response } = await dialog.showMessageBox({
+                type: 'question',
+                message: 'Çıktı klasörü bulunamadı. Lütfen manuel seçin.',
+                buttons: ['Seç', 'İptal']
+            });
+            if (response === 0) {
+                const res = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+                if (!res.canceled) targets = res.filePaths;
             }
         }
 
-        if (foundDir) {
-            const items = fs.readdirSync(foundDir);
-            let deleteCount = 0;
+        if (targets.length === 0) return { success: false, error: 'Klasör seçilmedi.' };
 
-            for (const item of items) {
-                const itemPath = path.join(foundDir, item);
+        for (const target of targets) {
+            if (!fs.existsSync(target)) continue;
+            const files = fs.readdirSync(target);
+            for (const file of files) {
+                const fullPath = path.join(target, file);
                 try {
-                    fs.rmSync(itemPath, { recursive: true, force: true });
-                    deleteCount++;
+                    await shell.trashItem(fullPath);
+                    deletedCount++;
                 } catch (e) {
-                    console.error('Error deleting item ' + item + ':', e);
+                    try {
+                        fs.rmSync(fullPath, { recursive: true, force: true });
+                        deletedCount++;
+                    } catch (e2) { }
                 }
             }
-            return { success: true, count: deleteCount };
         }
-        return { success: true, count: 0 };
-    } catch (error) {
-        console.error('Clean outputs error:', error);
-        return { success: false, error: error.message };
+
+        dialog.showMessageBox({
+            type: 'info',
+            title: 'Tamamlandı',
+            message: `${deletedCount} dosya temizlendi.`,
+            detail: `Konum: ${targets.join('\n')}`
+        });
+
+        return { success: true, count: deletedCount };
+    } catch (err) {
+        log.error(`Clean error: ${err.message}`);
+        dialog.showErrorBox('Hata', err.message);
+        return { success: false, error: err.message };
     }
 });
 
-// Auto-updater logs and events
-autoUpdater.logger = log;
-autoUpdater.on('update-available', () => {
-    log.info('Güncelleme bulundu.');
-});
+ipcMain.handle('open-text-content', async (event, content, title) => {
+    try {
+        const tempDir = app.getPath('temp');
+        // Sanitize filename
+        const safeTitle = (title || 'temp_text').replace(/[^a-z0-9A-Z_]/g, '_');
+        const fileName = `${safeTitle}.txt`;
+        const filePath = path.join(tempDir, fileName);
 
-autoUpdater.on('update-downloaded', () => {
-    log.info('Güncelleme indirildi. Uygulama kapatılıp güncellenecek.');
-    dialog.showMessageBox({
-        type: 'info',
-        title: 'Güncelleme Hazır',
-        message: 'Yeni bir sürüm indirildi. Güncellemek için uygulama yeniden başlatılacak.',
-        buttons: ['Hemen Yükle']
-    }).then(() => {
-        autoUpdater.quitAndInstall();
-    });
-});
-
-autoUpdater.on('error', (err) => {
-    log.error('Güncelleme hatası:', err);
+        fs.writeFileSync(filePath, content || '', 'utf-8');
+        await shell.openPath(filePath);
+        return { success: true };
+    } catch (err) {
+        console.error("Open text error:", err);
+        return { success: false, error: err.message };
+    }
 });

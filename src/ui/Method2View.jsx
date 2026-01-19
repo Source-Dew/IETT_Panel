@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { WifiOff, HardDrive, Users, FileSpreadsheet } from 'lucide-react';
+import React from 'react';
 
 // Method 2 specific modules
 import HKOffline from '../modules/method2/HKOffline';
 import HKHDD from '../modules/method2/HKHDD';
 import HKFirebox from '../modules/method2/HKFirebox';
 import HKPassenger from '../modules/method2/HKPassenger';
-import PCOffline from '../modules/method2/PCOffline';
+
 import OHOOffline from '../modules/method2/OHOOffline';
 import IETTOffline from '../modules/method2/IETTOffline';
+import OHOTrigger from '../modules/method2/OHOTrigger';
 
 const Method2View = ({ activeMode, onModeChange }) => {
 
@@ -23,7 +23,8 @@ const Method2View = ({ activeMode, onModeChange }) => {
             case 'hdd': return <HKHDD />;
             case 'firebox': return <HKFirebox />;
             case 'yolcu': return <HKPassenger />;
-            case 'pc_offline': return <PCOffline />;
+
+            case 'oho_trigger': return <OHOTrigger />;
             case 'oho_offline': return <OHOOffline />;
             case 'iett_offline': return <IETTOffline />;
             default: return <div className="text-slate-400">Mod seçilmedi veya geliştirme aşamasında.</div>;

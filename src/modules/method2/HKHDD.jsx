@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, FileSpreadsheet, X, Play, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { HardDrive, FileSpreadsheet, X, Play, CheckCircle2 } from 'lucide-react';
 import Terminal from '../../ui/Terminal';
 
 const HKHDD = () => {
@@ -135,16 +135,23 @@ const HKHDD = () => {
                             <span>Raporu Aç</span>
                         </button>
                     )}
-                    <button
-                        onClick={handleSelectFile}
-                        className={`flex items-center justify-center gap-2 px-4 h-10 rounded-xl border transition-all duration-300 font-semibold text-sm no-drag ${status === 'running' ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'} 
-                            ${selectedFile
-                                ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)] scale-[1.02]'
-                                : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-600'}`}
-                    >
-                        {selectedFile ? <CheckCircle2 size={16} /> : <FileSpreadsheet size={16} />}
-                        <span>{selectedFile ? 'Hıkvısıon Seçildi' : 'Hıkvısıon Veri'}</span>
-                    </button>
+                    {selectedFile ? (
+                        <div className="flex items-center bg-blue-500/10 border border-blue-500/50 rounded-xl px-4 h-10 gap-3">
+                            <CheckCircle2 size={16} className="text-blue-400" />
+                            <span className="text-blue-400 font-semibold text-sm max-w-[200px] truncate">{selectedFile.split(/[\\/]/).pop()}</span>
+                            <button onClick={() => setSelectedFile(null)} className="p-1 hover:bg-blue-500/20 rounded-md text-blue-400 transition-colors">
+                                <X size={16} />
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleSelectFile}
+                            className={`flex items-center justify-center gap-2 px-4 h-10 rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 hover:border-slate-600 transition-all font-semibold text-sm no-drag ${status === 'running' ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
+                        >
+                            <FileSpreadsheet size={16} />
+                            <span>Hıkvısıon Veri</span>
+                        </button>
+                    )}
                     {status === 'running' ? (
                         <button
                             onClick={handleStop}

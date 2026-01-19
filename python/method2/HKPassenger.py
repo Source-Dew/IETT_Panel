@@ -28,11 +28,14 @@ def process_hk_passenger(file_path, threshold, log_func):
 
         # Filtreleme
         def parse_percent(val):
-            try: return float(str(val).replace('%', '').replace(',', '.').strip())
-            except: return -1.0
+            try:
+                s = str(val).replace('%', '').replace(',', '.').strip()
+                return float(s)
+            except: 
+                return -1.0
 
-        df_hik['__yolcu'] = df_hik[yolcu_col].apply(parse_percent)
-        mask = df_hik['__yolcu'] >= threshold
+        df_hik['TEMP_YOLCU_PERCENT'] = df_hik[yolcu_col].apply(parse_percent)
+        mask = (df_hik['TEMP_YOLCU_PERCENT'] >= threshold)
         
         filtered_df = df_hik[mask].copy()
         
@@ -55,7 +58,7 @@ def process_hk_passenger(file_path, threshold, log_func):
         df_report['Yolcu Yükü (%)'] = df_final[yolcu_col]
         df_report['İETT Sefer Durumu'] = 'Bilinmiyor'
         
-        df_report = df_report.sort_values(by=['__yolcu'], ascending=False)
+        df_report = df_report.sort_values(by=['Yolcu Yükü (%)'], ascending=False)
 
         output_path = generate_premium_excel(df_report, "HIKVISION YOLCU YÜKÜ ANALİZİ", "HIKVISION Yolcu Yükü Veri (2.Yöntem).xlsx", log)
         

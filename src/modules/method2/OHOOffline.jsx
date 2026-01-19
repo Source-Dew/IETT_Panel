@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { WifiOff, FileSpreadsheet, X, Play, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { WifiOff, FileSpreadsheet, X, Play, CheckCircle2 } from 'lucide-react';
 import Terminal from '../../ui/Terminal';
 
 const OHOOffline = () => {
@@ -186,27 +186,42 @@ const OHOOffline = () => {
                             <span>Raporu Aç</span>
                         </button>
                     )}
-                    <button
-                        onClick={() => handleSelectFile(1)}
-                        className={`flex items-center justify-center gap-2 px-4 h-10 rounded-xl border transition-all duration-300 font-semibold text-sm no-drag ${status === 'running' ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'} 
-                            ${selectedFile1
-                                ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)] scale-[1.02]'
-                                : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-600'}`}
-                    >
-                        {selectedFile1 ? <CheckCircle2 size={16} /> : <FileSpreadsheet size={16} />}
-                        <span>{selectedFile1 ? 'Atayol Seçildi' : 'Atayol Veri'}</span>
-                    </button>
 
-                    <button
-                        onClick={() => handleSelectFile(2)}
-                        className={`flex items-center justify-center gap-2 px-4 h-10 rounded-xl border transition-all duration-300 font-semibold text-sm no-drag ${status === 'running' ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'} 
-                            ${selectedFile2
-                                ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)] scale-[1.02]'
-                                : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-600'}`}
-                    >
-                        {selectedFile2 ? <CheckCircle2 size={16} /> : <FileSpreadsheet size={16} />}
-                        <span>{selectedFile2 ? 'ÖHO Seçildi' : 'ÖHO Veri'}</span>
-                    </button>
+                    {selectedFile1 ? (
+                        <div className="flex items-center bg-blue-500/10 border border-blue-500/50 rounded-xl px-3 h-10 gap-2">
+                            <CheckCircle2 size={16} className="text-blue-400" />
+                            <span className="text-blue-400 font-semibold text-sm max-w-[120px] truncate">{selectedFile1.split(/[\\/]/).pop()}</span>
+                            <button onClick={() => setSelectedFile1(null)} className="p-1 hover:bg-blue-500/20 rounded-md text-blue-400 transition-colors">
+                                <X size={14} />
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => handleSelectFile(1)}
+                            className={`flex items-center justify-center gap-2 px-4 h-10 rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 hover:border-slate-600 transition-all font-semibold text-sm no-drag ${status === 'running' ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
+                        >
+                            <FileSpreadsheet size={16} />
+                            <span>Atayol Veri</span>
+                        </button>
+                    )}
+
+                    {selectedFile2 ? (
+                        <div className="flex items-center bg-blue-500/10 border border-blue-500/50 rounded-xl px-3 h-10 gap-2">
+                            <CheckCircle2 size={16} className="text-blue-400" />
+                            <span className="text-blue-400 font-semibold text-sm max-w-[120px] truncate">{selectedFile2.split(/[\\/]/).pop()}</span>
+                            <button onClick={() => setSelectedFile2(null)} className="p-1 hover:bg-blue-500/20 rounded-md text-blue-400 transition-colors">
+                                <X size={14} />
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => handleSelectFile(2)}
+                            className={`flex items-center justify-center gap-2 px-4 h-10 rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 hover:border-slate-600 transition-all font-semibold text-sm no-drag ${status === 'running' ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
+                        >
+                            <FileSpreadsheet size={16} />
+                            <span>ÖHO Veri</span>
+                        </button>
+                    )}
                     {status === 'running' ? (
                         <button onClick={handleStop} className="flex items-center justify-center gap-2 px-5 h-10 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl shadow-lg shadow-red-600/20 hover:shadow-red-600/40 hover:scale-[1.02] transition-all font-bold whitespace-nowrap active:scale-95 border border-red-500/50 text-sm group">
                             <X size={16} className="group-hover:rotate-90 transition-transform" /> <span>DURDUR</span>

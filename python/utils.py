@@ -1,18 +1,7 @@
 import os
-import json
 import time
-import asyncio
-import base64
-import random
-import uuid
-import orjson
+import re
 import pandas as pd
-from datetime import datetime, timedelta, timezone
-from curl_cffi.requests import AsyncSession
-from Crypto.Cipher import AES, PKCS1_OAEP
-from Crypto.PublicKey import RSA
-from Crypto.Random import get_random_bytes
-from Crypto.Hash import SHA256
 from python_calamine import CalamineWorkbook
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -21,177 +10,56 @@ from openpyxl.utils.units import pixels_to_EMU
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
 
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-class IETTBypasser:
-    def __init__(self, log_func):
-        self.pub_der = None
-        self.log = log_func
-        self.profiles = ["chrome110", "chrome120", "edge101", "safari15_5"]
-        self.os_configs = [
-            {"platform": "\"Windows\"", "ua_platform": "Windows", "mobile": "?0"},
-            {"platform": "\"macOS\"", "ua_platform": "macOS", "mobile": "?0"},
-            {"platform": "\"Linux\"", "ua_platform": "Linux", "mobile": "?0"}
-        ]
-        self.base_url = "https://arac.iett.gov.tr"
-        self.task_url_base = f"{self.base_url}/api/task/getCarTasks/"
-        self.pub_url = f"{self.base_url}/api/task/crypto/pubkey"
-
-    async def init_session(self):
-        return True
-
-    async def refresh_pubkey(self):
-        try:
-            async with AsyncSession(impersonate="chrome120") as s:
-                r = await s.get(self.pub_url, timeout=10)
-                if r.status_code == 200:
-                    self.pub_der = base64.b64decode(r.json()["key"])
-                    return True
-        except: pass
-        return False
-
-    def decrypt(self, aes_key, rj):
-        try:
-            iv, data = base64.b64decode(rj["iv"]), base64.b64decode(rj["data"])
-            return orjson.loads(AESGCM(aes_key).decrypt(iv, data, None).decode("utf-8"))
-        except: return None
-
-    async def get_ultra_session(self):
-        profile = random.choice(self.profiles)
-        os_cfg = random.choice(self.os_configs)
-        
-        session = AsyncSession(impersonate=profile, timeout=25)
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8",
-            "DeviceID": str(uuid.uuid4()),
-            "Origin": self.base_url,
-            "Referer": f"{self.base_url}/",
-            "X-Requested-With": "XMLHttpRequest",
-            "Sec-Ch-Ua-Platform": os_cfg["platform"],
-            "Sec-Ch-Ua-Mobile": os_cfg["mobile"],
-            "Sec-Fetch-Site": "same-origin",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Dest": "empty"
-        }
-        
-        if "chrome" in profile or "edge" in profile:
-            ver = profile.replace("chrome", "").replace("edge", "")
-            headers["Sec-Ch-Ua"] = f'"Not_A Brand";v="8", "Chromium";v="{ver}", "Google Chrome";v="{ver}"'
-        
-        session.headers.update(headers)
-        try: 
-            await session.get(f"{self.base_url}/", timeout=12)
-            await asyncio.sleep(random.uniform(0.1, 0.3))
-        except: pass
-        return session
-
-    async def fetch_batch(self, door_codes):
-        if not self.pub_der:
-            if not await self.refresh_pubkey(): return None
-
-        pk = serialization.load_der_public_key(self.pub_der)
-        batch_str = ", ".join(door_codes)
-        
-        attempt = 0
-        while True: # Sonsuz deneme döngüsü (Onay gelene kadar veya başarılı olana kadar)
-            attempt += 1
-            async with await self.get_ultra_session() as session:
-                aes_key = os.urandom(32)
-                ek = base64.b64encode(pk.encrypt(aes_key, padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None))).decode()
-                
-                try:
-                    await asyncio.sleep(random.uniform(0.1, 0.4))
-                    r = await session.post(f"{self.task_url_base}{','.join(door_codes)}", 
-                                           json={"encKey": ek}, timeout=25)
-                    
-                    if "text/html" in r.headers.get("Content-Type", ""):
-                        self.log(f"   [X] WAF TESPİTİ! Profil değiştiriliyor... (Deneme: {attempt})")
-                        continue
-
-                    if r.status_code == 200:
-                        data = self.decrypt(aes_key, r.json())
-                        if isinstance(data, list):
-                            self.log(f"   [✓] BAŞARILI: {batch_str} doğrulandı.")
-                            return data
-                    
-                    self.log(f"   [!] SUNUCU HATASI (HTTP {r.status_code}): {batch_str} bekleniyor... (Deneme: {attempt})")
-                except Exception as e:
-                    self.log(f"   [!] BAĞLANTI HATASI: {str(e)}. {batch_str} grubu için bekliyor... (Deneme: {attempt})")
-            
-            # Üst üste hatalarda bekleme süresi ve profil rotasyonu
-            wait_time = min(15, 2 + (attempt * 0.5)) + random.uniform(0.5, 2.0)
-            await asyncio.sleep(wait_time)
-            
-            # Periyodik Pubkey yenileme (Sonsuz döngüde key eskiyebilir)
-            if attempt % 20 == 0:
-                await self.refresh_pubkey()
-
-    async def safe_fetch_all(self, all_codes, start_p=20, end_p=85):
-        results = []
-        total = len(all_codes)
-        if total == 0: return []
-        
-        self.log(f"[BAŞLADI] {total} araç için 3-Kanallı Ultra Live-Check başlatıldı.", start_p)
-        
-        batch_size = 6
-        batches = [all_codes[i:i + batch_size] for i in range(0, total, batch_size)]
-        
-        queue = asyncio.Queue()
-        for b in batches: queue.put_nowait(b)
-        
-        processed_count = [0] # List used for closure reference
-        lock = asyncio.Lock()
-
-        async def worker():
-            while not queue.empty():
-                batch = await queue.get()
-                batch_str = ", ".join(batch)
-                
-                # Progress calculation
-                async with lock:
-                    current_p = start_p + int((processed_count[0] / total) * (end_p - start_p))
-                
-                self.log(f"[TARANIYOR] {batch_str}...", current_p)
-                
-                data = await self.fetch_batch(batch)
-                
-                async with lock:
-                    if isinstance(data, list):
-                        results.extend(data)
-                    else:
-                        self.log(f"   [!!!] KRİTİK HATA: {batch_str} grubu çekilemedi!")
-                    
-                    processed_count[0] += len(batch)
-                
-                queue.task_done()
-                await asyncio.sleep(random.uniform(0.1, 0.3))
-
-        # 3 Parallel Workers
-        workers = [asyncio.create_task(worker()) for _ in range(3)]
-        await asyncio.gather(*workers)
-        
-        self.log(f"[TAMAMLANDI] {total} araç taraması bitti.", end_p)
-        return results
-
-def normalize_car_code(val):
-    return str(val).strip().upper().replace(' ', '').replace('_', '').replace('.', '')
+def normalize_car_code(val, smart=False):
+    val = str(val).strip().upper()
+    
+    if smart:
+        # Regex to find patterns like A-123, B-1050, A123, B1050
+        # Looks for a letter (A-Z) followed optionally by a dash/space, then digits
+        match = re.search(r'([A-Z])[\s_-]*(\d+)', val)
+        if match:
+            return f"{match.group(1)}{match.group(2)}"
+    
+    # Fallback / Default: simple cleanup
+    return val.replace(' ', '').replace('_', '').replace('.', '').replace('-', '')
 
 def get_desktop_path():
-    return os.path.join(os.path.expanduser("~"), "Desktop")
+    user_home = os.path.expanduser("~")
+    # Check OneDrive paths first
+    od_desktop = os.path.join(user_home, "OneDrive", "Desktop")
+    if os.path.exists(od_desktop): return od_desktop
+    
+    od_desktop_tr = os.path.join(user_home, "OneDrive", "Masaüstü")
+    if os.path.exists(od_desktop_tr): return od_desktop_tr
+    
+    # Fallback to standard Desktop
+    return os.path.join(user_home, "Desktop")
 
 def read_excel_smart(file_path, log):
     try:
-        wb = CalamineWorkbook.from_path(file_path)
-        sheet_name = wb.sheet_names[0]
-        rows = wb.get_sheet_by_name(sheet_name).to_python()
-        if not rows: return pd.DataFrame()
+        if not os.path.exists(file_path):
+            log(f"Hata: Dosya bulunamadı: {file_path}")
+            return pd.DataFrame()
+
+        # Try Calamine first (Fast)
+        rows = None
+        try:
+            wb = CalamineWorkbook.from_path(file_path)
+            sheet_name = wb.sheet_names[0]
+            rows = wb.get_sheet_by_name(sheet_name).to_python()
+        except Exception as cal_err:
+            log(f"Hızlı okuma atlandı, klasik motor deneniyor...")
+            # Fallback to pandas
+            return pd.read_excel(file_path)
+
+        if not rows or len(rows) == 0: 
+            return pd.DataFrame()
         
         best_row_idx = 0
         max_score = -1
-        search_keywords = ['KAPINO', 'KAPI NO', 'PLAKA', 'DURUM', 'AĞ DURUMU', 'CIHAZ', 'KOD', 'SÜRE', 'SURE', 'ADRES', 'FAKTÖR']
+        search_keywords = ['KAPINO', 'KAPI NO', 'PLAKA', 'DURUM', 'AĞ DURUMU', 'CIHAZ', 'KOD', 'SÜRE', 'SURE', 'ADRES', 'FAKTÖR', 'NUMARASI']
+        
         for i in range(min(30, len(rows))):
             row_str = [str(x).strip().upper() for x in rows[i] if x is not None]
             score = sum(1 for kw in search_keywords if any(kw in val for val in row_str))
@@ -201,15 +69,22 @@ def read_excel_smart(file_path, log):
             if score >= 3: break
         
         headers = [str(x).strip() if x is not None else f"Column_{j}" for j, x in enumerate(rows[best_row_idx])]
+        # If headers and data are the same row or something went wrong
+        if best_row_idx + 1 >= len(rows):
+             return pd.DataFrame(columns=headers)
+
         df = pd.DataFrame(rows[best_row_idx + 1:], columns=headers)
         return df
     except Exception as e:
-        log(f"Okuma hatası: {str(e)}")
-        return pd.DataFrame()
+        log(f"Dosya okuma kritik hatası: {repr(e)}")
+        try:
+            return pd.read_excel(file_path)
+        except:
+            return pd.DataFrame()
 
 def find_best_column(columns, target_keywords):
     for col in columns:
-        norm_col = str(col).upper().replace('İ', 'I').replace('Ğ', 'G').replace('Ü', 'U').replace('Ş', 'S').replace('Ö', 'O').replace('Ç', 'C').replace(' ', '')
+        norm_col = str(col).upper().replace('İ', 'I').replace('Ğ', 'G').replace('Ü', 'U').replace('Ş', 'S').replace('Ö', 'O').replace('Ç', 'C').replace(' ', '').replace('_', '')
         for kw in target_keywords:
             if kw.upper().replace(' ', '') in norm_col: return col
     return None
@@ -297,10 +172,20 @@ def generate_premium_excel(df, title, output_filename, log):
 
     # Data (Row 5+)
     for r_idx, (idx, row_data) in enumerate(df.iterrows(), 5):
+        # If the row is completely empty, skip it to create a visual gap in Excel
+        if all(str(v).strip() == "" or v is None for v in row_data):
+            continue
+            
         for c_idx, val in enumerate(row_data, 1):
             cell = ws.cell(row=r_idx, column=c_idx, value=val)
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = full_border
+            
+            # Special Formatting: Red background for '0' in door counts
+            col_name = str(df.columns[c_idx-1])
+            if "Kapı (Adet)" in col_name and str(val) == "0":
+                cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+                cell.font = Font(color="FFFFFF", bold=True)
 
     wb.save(output_path)
     return output_path
